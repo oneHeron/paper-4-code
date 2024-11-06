@@ -16,15 +16,15 @@ def data_preprocessing(dataset):
     ).to_dense()
     dataset.adj_label = dataset.adj
 
-    test_data = dataset.adj
-    test_data = dataset.adj_label
+    # test_data = dataset.adj
+    # test_data = dataset.adj_label
 
     dataset.adj += torch.eye(dataset.x.shape[0])
-    test_data = dataset.adj
+    # test_data = dataset.adj
     dataset.adj = normalize(dataset.adj, norm="l1")
-    test_data = dataset.adj
+    # test_data = dataset.adj
     dataset.adj = torch.from_numpy(dataset.adj).to(dtype=torch.float)
-    test_data = dataset.adj
+    # test_data = dataset.adj
 
     return dataset
 
