@@ -28,20 +28,38 @@ class SpGAT(nn.Module):
         # self.transformer4 = TransformerLayer(hidden_size, num_heads, num_layers, dropout)
         self.conv8 = SpGATLayer(hidden_size, B_dim, alpha)
 
-    def forward(self, x, B, adj, M):
-        h = self.conv1(x, adj, M)
-        # h = self.transformer1(h)
-        z1 = self.conv2(h, adj, M)
+    # def forward(self, x, B, adj, M):
+    #     h = self.conv1(x, adj, M)
+    #     # h = self.transformer1(h)
+    #     z1 = self.conv2(h, adj, M)
+    #
+    #     b = self.conv3(B, adj, M)
+    #     # b = self.transformer2(b)
+    #     z2 = self.conv4(b, adj, M)
+    #
+    #     z = (z1 + z2) / 2
+    #
+    #     z = F.normalize(z, p=2, dim=1)
+    #
+    #     x_hat, B_hat, x_hat2, B_hat2 = self.decode(z1, z2, z, adj, M)
+    #
+    #     A_pred = self.dot_product_decode(z)
+    #     return A_pred, z, x_hat, B_hat, x_hat2, B_hat2
 
-        b = self.conv3(B, adj, M)
+    def forward(self, x, B, adj):
+        h = self.conv1(x, adj)
+        # h = self.transformer1(h)
+        z1 = self.conv2(h, adj)
+
+        b = self.conv3(B, adj)
         # b = self.transformer2(b)
-        z2 = self.conv4(b, adj, M)
+        z2 = self.conv4(b, adj)
 
         z = (z1 + z2) / 2
 
         z = F.normalize(z, p=2, dim=1)
 
-        x_hat, B_hat, x_hat2, B_hat2 = self.decode(z1, z2, z, adj, M)
+        x_hat, B_hat, x_hat2, B_hat2 = self.decode(z1, z2, z, adj)
 
         A_pred = self.dot_product_decode(z)
         return A_pred, z, x_hat, B_hat, x_hat2, B_hat2
@@ -52,22 +70,40 @@ class SpGAT(nn.Module):
         return A_pred
 
     # Attribute Decoder
-    def decode(self, z1, z2, z, adj, M):
-        z1 = self.conv5(z1, adj, M)
+    # def decode(self, z1, z2, z, adj, M):
+    #     z1 = self.conv5(z1, adj, M)
+    #     # z1 = self.transformer3(z1)
+    #     x_hat = self.conv6(z1, adj, M)
+    #
+    #     h = self.conv5(z, adj, M)
+    #     # h = self.transformer3(h)
+    #     x_hat2 = self.conv6(h, adj, M)
+    #
+    #     z2 = self.conv7(z2, adj, M)
+    #     # z2 = self.transformer4(z2)
+    #     B_hat = self.conv8(z2, adj, M)
+    #
+    #     h = self.conv7(z, adj, M)
+    #     # h = self.transformer4(h)
+    #     B_hat2 = self.conv8(h, adj, M)
+    #     return x_hat, B_hat, x_hat2, B_hat2
+
+    def decode(self, z1, z2, z, adj):
+        z1 = self.conv5(z1, adj)
         # z1 = self.transformer3(z1)
-        x_hat = self.conv6(z1, adj, M)
+        x_hat = self.conv6(z1, adj)
 
-        h = self.conv5(z, adj, M)
+        h = self.conv5(z, adj)
         # h = self.transformer3(h)
-        x_hat2 = self.conv6(h, adj, M)
+        x_hat2 = self.conv6(h, adj)
 
-        z2 = self.conv7(z2, adj, M)
+        z2 = self.conv7(z2, adj)
         # z2 = self.transformer4(z2)
-        B_hat = self.conv8(z2, adj, M)
+        B_hat = self.conv8(z2, adj)
 
-        h = self.conv7(z, adj, M)
+        h = self.conv7(z, adj)
         # h = self.transformer4(h)
-        B_hat2 = self.conv8(h, adj, M)
+        B_hat2 = self.conv8(h, adj)
         return x_hat, B_hat, x_hat2, B_hat2
 
 

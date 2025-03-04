@@ -1,5 +1,6 @@
 import os
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 import torch
@@ -25,6 +26,13 @@ def k_core_s(G):
     # 矩阵转置翻转
     sim = matrix_transpose_flip(adj)
     return sim
+
+
+def matrix_transpose_flip(adj):
+    adj_T = adj.T
+    np.fill_diagonal(adj_T, 0)  # 将对角线清零
+    adj_res = adj + adj_T
+    return adj_res
 
 
 def data_to_save(res, SAVE_PATH, columns):
@@ -66,7 +74,49 @@ def data_preprocessing(dataset):
     return dataset
 
 
-mat = np.array([[2, 0], [0, 2]])
+def data_preprocessing_new(dataset):
+    dataset.adj = torch.sparse_coo_tensor(
+        dataset.edge_index, torch.ones(dataset.edge_index.shape[1]),
+        torch.Size([dataset.x.shape[0], dataset.x.shape[0]])
+    ).to_dense()
+    dataset.adj_label = dataset.adj
+
+    G = nx.from_numpy_array(dataset.adj.numpy())
+    G.remove_edges_from(nx.selfloop_edges(G))
+    sim = k_core_s(G)
+
+    dataset.adj += torch.eye(dataset.x.shape[0])
+    dataset.adj = normalize(dataset.adj, norm="l1")
+    dataset.adj = torch.from_numpy(dataset.adj).to(dtype=torch.float)
+
+    # G = nx.from_numpy_array(dataset.adj.numpy())
+    # G.remove_edges_from(nx.selfloop_edges(G))
+    # sim = k_core_s(G)
+
+    dataset.sim = torch.from_numpy(sim).to(dtype=torch.float)
+
+    return dataset
+
+
+def data_preprocessing_ACM_DBLP(dataset, adj):
+    dataset['adj'] = adj.to_dense()
+    dataset['adj_label'] = adj
+
+    G = nx.from_numpy_array(dataset['adj'].numpy())
+    G.remove_edges_from(nx.selfloop_edges(G))
+    sim = k_core_s(G)
+
+    dataset['adj'] += torch.eye(dataset['adj'].shape[0])
+    dataset['adj'] = normalize(dataset['adj'], norm="l1")
+    dataset['adj'] = torch.from_numpy(dataset['adj']).to(dtype=torch.float)
+
+    # G = nx.from_numpy_array(dataset.adj.numpy())
+    # G.remove_edges_from(nx.selfloop_edges(G))
+    # sim = k_core_s(G)
+
+    dataset['sim'] = torch.from_numpy(sim).to(dtype=torch.float)
+
+    return dataset
 
 
 def get_M(adj):
