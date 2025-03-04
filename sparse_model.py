@@ -2,31 +2,31 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from layer import GATLayer
+from sparse_layer import SpGATLayer
 
 
-class GAT(nn.Module):
+class SpGAT(nn.Module):
     def __init__(self, num_features, B_dim, hidden_size, embedding_size, alpha):
-        super(GAT, self).__init__()
+        super(SpGAT, self).__init__()
         self.hidden_size = hidden_size
         self.embedding_size = embedding_size
         self.alpha = alpha
         # Encoder
-        self.conv1 = GATLayer(num_features, hidden_size, alpha)
+        self.conv1 = SpGATLayer(num_features, hidden_size, alpha)
         # self.transformer1 = TransformerLayer(hidden_size, num_heads, num_layers, dropout)
-        self.conv2 = GATLayer(hidden_size, embedding_size, alpha)
+        self.conv2 = SpGATLayer(hidden_size, embedding_size, alpha)
 
-        self.conv3 = GATLayer(B_dim, hidden_size, alpha)
+        self.conv3 = SpGATLayer(B_dim, hidden_size, alpha)
         # self.transformer2 = TransformerLayer(hidden_size, num_heads, num_layers, dropout)
-        self.conv4 = GATLayer(hidden_size, embedding_size, alpha)
+        self.conv4 = SpGATLayer(hidden_size, embedding_size, alpha)
         # Decoder
-        self.conv5 = GATLayer(embedding_size, hidden_size, alpha)
+        self.conv5 = SpGATLayer(embedding_size, hidden_size, alpha)
         # self.transformer3 = TransformerLayer(hidden_size, num_heads, num_layers, dropout)
-        self.conv6 = GATLayer(hidden_size, num_features, alpha)
+        self.conv6 = SpGATLayer(hidden_size, num_features, alpha)
 
-        self.conv7 = GATLayer(embedding_size, hidden_size, alpha)
+        self.conv7 = SpGATLayer(embedding_size, hidden_size, alpha)
         # self.transformer4 = TransformerLayer(hidden_size, num_heads, num_layers, dropout)
-        self.conv8 = GATLayer(hidden_size, B_dim, alpha)
+        self.conv8 = SpGATLayer(hidden_size, B_dim, alpha)
 
     def forward(self, x, B, adj, M):
         h = self.conv1(x, adj, M)

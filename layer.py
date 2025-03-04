@@ -3,22 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class TransformerLayer(nn.Module):
-
-    def __init__(self, hidden_channels, num_heads, num_layers, dropout=0.1):
-        super(TransformerLayer, self).__init__()
-        # Transformer部分
-        encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_channels, nhead=num_heads,
-                                                   dropout=dropout, batch_first=True)
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-
-    def forward(self, x):
-        x = x.unsqueeze(0)  # [num_nodes, hidden_channels] -> [1, num_nodes, hidden_channels]
-        x = self.transformer(x)
-        x = x.squeeze(0)  # 恢复原始维度
-        return x
-
-
 class GATLayer(nn.Module):
     """
     Simple GAT layer, similar to https://ar xiv.org/abs/1710.10903

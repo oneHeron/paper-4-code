@@ -59,13 +59,13 @@ def trainer(dataset, ALPHA=1.1, BETA=10, LBD=.1):
     dataset = utils.data_preprocessing(dataset)
     adj = dataset.adj.to(device)
     adj_label = dataset.adj_label.to(device)
-    M = utils.get_M(adj).to(device)
+    # M = utils.get_M(adj).to(device)
 
-    K = 1 / (adj_label.sum().item()) * (
-            adj_label.sum(dim=1).reshape(adj_label.shape[0], 1) @ adj_label.sum(dim=1).reshape(1, adj_label.shape[0]))
-    B = adj_label - K
-    B = B.to(device)
-    B_dim = B.shape[0]
+    # K = 1 / (adj_label.sum().item()) * (
+    #         adj_label.sum(dim=1).reshape(adj_label.shape[0], 1) @ adj_label.sum(dim=1).reshape(1, adj_label.shape[0]))
+    # B = adj_label - K
+    # B = B.to(device)
+    # B_dim = B.shape[0]
     model = DDGAE(num_features=args.input_dim, B_dim=B_dim, hidden_size=args.hidden_size,
                   embedding_size=args.embedding_size, alpha=args.alpha, num_clusters=args.n_clusters).to(device)
     # model.load_state_dict(torch.load(args.pretrain_path, map_location='cpu'))
@@ -201,7 +201,6 @@ if __name__ == "__main__":
         args.beta = 10
 
     # args.pretrain_path = f"./pretrain/pre_ddgae_{args.name}_new.pkl"
-
 
     acc = []
     nmi = []

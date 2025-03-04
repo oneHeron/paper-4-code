@@ -1,7 +1,44 @@
+import os
+
 import numpy as np
+import pandas as pd
 import torch
 from sklearn.preprocessing import normalize
 from torch_geometric.datasets import Planetoid
+
+
+def k_core_s(G):
+    adj = np.array(nx.adjacency_matrix(G).todense())
+    # 获取节点core数目列表
+    core_num = nx.core_number(G)
+    # 获取最大节点core数目列表
+    max_core_num = max(list(core_num.values()))
+    adj = adj.tolist()
+    # 归一化
+    for i in range(len(adj)):
+        for j in range(len(adj)):
+            if i > j:
+                adj[i][j] = 0
+            elif adj[i][j] != 0:
+                adj[i][j] = (adj[i][j] * core_num[i]) / max_core_num
+    adj = np.array(adj, dtype='float32')
+    # 矩阵转置翻转
+    sim = matrix_transpose_flip(adj)
+    return sim
+
+
+def data_to_save(res, SAVE_PATH, columns):
+    # 检查文件是否存在且不为空
+    file_exists = os.path.isfile(SAVE_PATH)
+    file_is_empty = not file_exists or os.path.getsize(SAVE_PATH) == 0
+
+    #  保存实验结果
+    if file_is_empty:
+        data = pd.DataFrame(res, columns=columns)
+        data.to_csv(SAVE_PATH, columns=columns, mode="a+", header=True, index=False)
+    else:
+        data = pd.DataFrame(res)
+        data.to_csv(SAVE_PATH, mode="a+", header=False, index=False)
 
 
 def get_dataset(dataset):
