@@ -28,6 +28,9 @@ class SpGAT(nn.Module):
         # self.transformer4 = TransformerLayer(hidden_size, num_heads, num_layers, dropout)
         self.conv8 = SpGATLayer(hidden_size, B_dim, alpha)
 
+        # 添加可训练的权重参数
+        self.weight = nn.Parameter(torch.tensor([0.5], requires_grad=True))
+
     # def forward(self, x, B, adj, M):
     #     h = self.conv1(x, adj, M)
     #     # h = self.transformer1(h)
@@ -55,7 +58,9 @@ class SpGAT(nn.Module):
         # b = self.transformer2(b)
         z2 = self.conv4(b, adj)
 
-        z = (z1 + z2) / 2
+        # z = (z1 + z2) / 2
+        # 使用可训练的权重参数动态分配权重
+        z = self.weight * z1 + (1 - self.weight) * z2
 
         z = F.normalize(z, p=2, dim=1)
 

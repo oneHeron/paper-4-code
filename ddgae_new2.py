@@ -5,6 +5,8 @@ import time
 
 import scipy
 
+from sklearn.cluster import KMeans
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,6 +17,22 @@ import random
 import utils
 from evaluation import eva
 from sparse_model import SpGAT, Clustering_Module, Clustering_Module_Loss
+from torch.utils.data import Dataset, DataLoader
+
+
+class GraphDataset(Dataset):
+    def __init__(self, data, sim, adj, adj_label, y):
+        self.data = data
+        self.sim = sim
+        self.adj = adj
+        self.adj_label = adj_label
+        self.y = y
+
+    def __len__(self):
+        return self.data.shape[0]
+
+    def __getitem__(self, idx):
+        return self.data[idx], self.sim[idx], self.adj, self.adj_label, self.y[idx]
 
 
 class DDGAE(nn.Module):
@@ -57,14 +75,13 @@ def trainer(dataset_, ALPHA=1.1, BETA=10, LBD=.1):
     data = None
     adj = None
     adj_label = None
+    y = None
     if args.name in ['Cora', 'Citeseer', 'Pubmed']:
         dataset_ = utils.data_preprocessing_new(dataset_)
         adj = dataset_.adj.to(device)
         sim = dataset_.sim.to(device)
-        # data and label
         data = torch.Tensor(dataset_.x).to(device)
         y = dataset_.y.cpu().numpy()
-
         adj_label = dataset_.adj_label.to(device)
 
     if args.name in ['ACM', 'DBLP']:
@@ -78,20 +95,13 @@ def trainer(dataset_, ALPHA=1.1, BETA=10, LBD=.1):
 
         sim = dataset['sim'].to(device)
         adj = dataset['adj'].to(device)
-        # data and label
         y = np.argmax(dataset_['label'], axis=1)
         y = y.reshape(-1, 1)
         adj_label = dataset['adj_label'].to(device)
-    # M = utils.get_M(adj).to(device)
 
-    # K = 1 / (adj_label.sum().item()) * (
-    #         adj_label.sum(dim=1).reshape(adj_label.shape[0], 1) @ adj_label.sum(dim=1).reshape(1, adj_label.shape[0]))
-    # B = adj_label - K
-    # B = B.to(device)
     sim_dim = sim.shape[0]
     model = DDGAE(num_features=args.input_dim, B_dim=sim_dim, hidden_size=args.hidden_size,
                   embedding_size=args.embedding_size, alpha=args.alpha, num_clusters=args.n_clusters).to(device)
-    # model.load_state_dict(torch.load(args.pretrain_path, map_location='cpu'))
     criterion_cluster = Clustering_Module_Loss(
         num_clusters=args.n_clusters,
         alpha=ALPHA,
@@ -101,47 +111,54 @@ def trainer(dataset_, ALPHA=1.1, BETA=10, LBD=.1):
     print(model)
     optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-    # with torch.no_grad():
-    #     _, z, _, _, _, _ = model.gat(data, B, adj, M)
-    #
-    # # get kmeans and pretrain cluster result
-    # kmeans = KMeans(n_clusters=args.n_clusters, n_init=20)
-    # y_pred = kmeans.fit_predict(z.data.cpu().numpy())
-    # model.cluster_layer.data = torch.tensor(kmeans.cluster_centers_).to(device)
-    # eva(y, y_pred, 'pretrain')pred = []
     max_res = [0, 0, 0, 0]
     result = []
+
+    datasets_ = GraphDataset(data, sim, adj, adj_label, y)
+    dataloader = DataLoader(datasets_, batch_size=args.batch_size, shuffle=True)
 
     for epoch in range(args.max_epoch):
         model.train()
         pred = []
 
-        # A_hat, z, x_hat, B_hat, x_hat2, B_hat2, cm = model(data, sim, adj, M)
-        A_hat, z, x_hat, sim_hat, x_hat2, sim_hat2, cm = model(data, sim, adj)
-        # kl_loss = F.kl_div(q.log(), p, reduction='batchmean')
-        cm_loss = criterion_cluster(cm)
-        # re_loss = F.binary_cross_entropy(A_hat.view(-1), adj_label.view(-1))
-        re_loss = F.binary_cross_entropy(A_hat.reshape(-1), adj_label.reshape(-1))
-        B_loss = F.mse_loss(sim_hat, sim) + F.mse_loss(sim_hat2, sim)
-        x_loss = F.mse_loss(x_hat, data) + F.mse_loss(x_hat2, data)
-        L_f = x_loss + B_loss
-        L_r = L_f + args.lambda1 * re_loss
+        for batch_data, batch_sim, batch_adj, batch_adj_label, batch_y in dataloader:
+            batch_data = batch_data.to(device)
+            batch_sim = batch_sim.to(device)
+            batch_adj = batch_adj.to(device)
+            batch_adj_label = batch_adj_label.to(device)
 
-        loss = L_r + args.beta * cm_loss
+            # A_hat, z, x_hat, B_hat, x_hat2, B_hat2, cm = model(data, sim, adj, M)
+            A_hat, z, x_hat, sim_hat, x_hat2, sim_hat2, cm = model(batch_data, batch_data, batch_adj)
+            # kl_loss = F.kl_div(q.log(), p, reduction='batchmean')
+            cm_loss = criterion_cluster(cm)
+            # re_loss = F.binary_cross_entropy(A_hat.view(-1), adj_label.view(-1))
+            re_loss = F.binary_cross_entropy(A_hat.reshape(-1), adj_label.reshape(-1))
+            x_loss = F.mse_loss(x_hat, data) + F.mse_loss(x_hat2, data)
+            B_loss = F.mse_loss(sim_hat, sim) + F.mse_loss(sim_hat2, sim)
+            L_f = x_loss + B_loss
+            L_r = L_f + args.lambda1 * re_loss
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            loss = L_r + args.beta * cm_loss
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
         if epoch % args.update_interval == 0:
             # update_interval
             model.eval()
             with torch.no_grad():
-                # _, _, _, _, _, _, cm = model(data, sim, adj, M)
-                _, _, _, _, _, _, cm = model(data, sim, adj)
-            _, gamma, _, _ = cm
-            pred += gamma.argmax(-1).detach().cpu().tolist()
-            acc, nmi, ari, f1 = eva(y, pred, loss, epoch)
+                for batch_data, batch_sim, batch_adj, batch_adj_label, batch_y in dataloader:
+                    batch_data = batch_data.to(device)
+                    batch_sim = batch_sim.to(device)
+                    batch_adj = batch_adj.to(device)
+                    batch_adj_label = batch_adj_label.to(device)
+
+                    _, _, _, _, _, _, cm = model(batch_data, batch_sim, batch_adj)
+                    _, gamma, _, _ = cm
+                    pred += gamma.argmax(-1).detach().cpu().tolist()
+
+            acc, nmi, ari, f1 = eva(y, pred, epoch)
             if acc >= max_res[0]:
                 max_res[0] = acc
                 result = [epoch, acc, nmi, ari, f1]
@@ -188,13 +205,15 @@ if __name__ == "__main__":
     parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
     parser.add_argument("--lambda1", type=float, default=1, help="lambda for the reconstruct loss.")
     parser.add_argument("--beta", type=float, default=15, help="beta for the cluster loss.")
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training.")
     args = parser.parse_args()
     args.cuda = torch.cuda.is_available()
     print("use cuda: {}".format(args.cuda))
     device = torch.device("cuda" if args.cuda else "cpu")
 
-    datasets = ['Citeseer', 'Cora']
-    # datasets = ['ACM', 'DBLP', 'Citeseer']
+    # datasets = ['Citeseer', 'Cora']
+    # datasets = ['Pubmed']
+    datasets = ['ACM', 'DBLP']
     # args.name = 'ACM'
     for args.name in datasets:
         dataset = None
@@ -213,7 +232,7 @@ if __name__ == "__main__":
             else:
                 args.input_dim = dataset['features'].shape[1]
 
-        SAVE_PATH = f"./result/{args.name}_res.csv"
+        SAVE_PATH = f"./result/{args.name}_new_res.csv"
 
         # cora数据集 2708个节点，5429条边。标签共7个类别。数据集的特征维度是1433维。
         # citeSeer数据集 3312个节点，4723条边。标签共7个类别。数据集的特征维度是3703维。
@@ -223,14 +242,14 @@ if __name__ == "__main__":
         # Diabetes Mellitus Type 2
         if args.name == 'Cora':
             args.lr = 6e-3
-            args.lambda1 = 1
-            args.beta = 1
+            args.lambda1 = 5
+            args.beta = 10
 
         if args.name == 'Citeseer':
             args.lr = 1e-3
-            args.lambda1 = 1
-            args.beta = 1
-            args.embedding_size = 32
+            args.lambda1 = 5
+            args.beta = 10
+            args.hidden_size = 32
 
         if args.name == 'DBLP':
             args.lr = 1e-2

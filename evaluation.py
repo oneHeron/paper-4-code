@@ -66,9 +66,9 @@ def cluster_acc(y_true, y_pred):
     return acc, f1_macro
 
 
-def eva(y_true, y_pred, epoch=0):
+def eva(y_true, y_pred, loss, epoch=0):
     acc, f1 = cluster_acc(y_true, y_pred)
     nmi = nmi_score(y_true, y_pred, average_method="arithmetic")
     ari = ari_score(y_true, y_pred)
-    print(f"epoch {epoch}:acc {acc:.4f}, nmi {nmi:.4f}, ari {ari:.4f}, f1 {f1:.4f}")
+    print(f"epoch {epoch}:acc {acc:.4f}, nmi {nmi:.4f}, ari {ari:.4f}, f1 {f1:.4f}, loss {loss: .4f}")
     return acc, nmi, ari, f1

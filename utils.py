@@ -98,6 +98,29 @@ def data_preprocessing_new(dataset):
     return dataset
 
 
+def data_preprocessing_new_ACM(dataset):
+    # dataset.adj = torch.from_numpy(dataset.adj).float().to_dense()
+    # dataset.adj = dataset.adj.clone().detach().requires_grad_(True).float().to_dense()
+    dataset.adj = dataset.adj.clone().detach().float()
+    dataset.adj_label = dataset.adj
+
+    G = nx.from_numpy_array(dataset.adj.cpu().detach().numpy())
+    G.remove_edges_from(nx.selfloop_edges(G))
+    sim = k_core_s(G)
+
+    dataset.adj += torch.eye(dataset.features.shape[0])
+    dataset.adj = normalize(dataset.adj, norm="l1")
+    dataset.adj = torch.from_numpy(dataset.adj).to(dtype=torch.float)
+
+    # G = nx.from_numpy_array(dataset.adj.numpy())
+    # G.remove_edges_from(nx.selfloop_edges(G))
+    # sim = k_core_s(G)
+
+    dataset.sim = torch.from_numpy(sim).to(dtype=torch.float32)
+
+    return dataset
+
+
 def data_preprocessing_ACM_DBLP(dataset, adj):
     dataset['adj'] = adj.to_dense()
     dataset['adj_label'] = adj

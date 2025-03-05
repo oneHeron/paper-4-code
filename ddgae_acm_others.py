@@ -17,6 +17,16 @@ from evaluation import eva
 from sparse_model import SpGAT, Clustering_Module, Clustering_Module_Loss
 
 
+class Dataset:
+    def __init__(self, name, adj, features, labels, n_clusters, sim=None):
+        self.name = name
+        self.adj = adj
+        self.features = features
+        self.labels = labels
+        self.n_clusters = n_clusters
+        self.sim = sim
+
+
 class DDGAE(nn.Module):
     def __init__(self, num_features, B_dim, hidden_size, embedding_size, alpha, num_clusters, v=1):
         super(DDGAE, self).__init__()
@@ -67,21 +77,20 @@ def trainer(dataset_, ALPHA=1.1, BETA=10, LBD=.1):
 
         adj_label = dataset_.adj_label.to(device)
 
-    if args.name in ['ACM', 'DBLP']:
-        if args.name == 'ACM':
-            adj = torch.tensor(dataset_['PAP'], dtype=torch.float32)
-            data = torch.Tensor(dataset_['feature']).to(device)
-        if args.name == 'DBLP':
-            adj = torch.tensor(dataset_['net_APA'], dtype=torch.float32)
-            data = torch.Tensor(dataset_['features']).to(device)
-        dataset_ = utils.data_preprocessing_ACM_DBLP(dataset_, adj)
-
-        sim = dataset['sim'].to(device)
-        adj = dataset['adj'].to(device)
+    if args.name in ['acm', 'dblp', 'wiki', 'amap']:
+        # dataset_ = torch.tensor(dataset_)
+        if isinstance(dataset_.adj, np.ndarray):
+            dataset_.adj = torch.from_numpy(dataset_.adj).float().to_dense()
+        else:
+            # dataset_.adj = torch.tensor(dataset_.adj.toarray()).float().to_dense()
+            dataset_.adj = torch.from_numpy(dataset.adj.numpy()).float().to_dense()
+        dataset_ = utils.data_preprocessing_new_ACM(dataset_)
+        adj = dataset_.adj.to(device)
+        sim = dataset_.sim.to(device)
+        data = torch.from_numpy(dataset_.features).float().to(device)
         # data and label
-        y = np.argmax(dataset_['label'], axis=1)
-        y = y.reshape(-1, 1)
-        adj_label = dataset['adj_label'].to(device)
+        y = dataset_.labels
+        adj_label = dataset_.adj_label.to(device)
     # M = utils.get_M(adj).to(device)
 
     # K = 1 / (adj_label.sum().item()) * (
@@ -193,87 +202,106 @@ if __name__ == "__main__":
     print("use cuda: {}".format(args.cuda))
     device = torch.device("cuda" if args.cuda else "cpu")
 
-    datasets = ['Citeseer', 'Cora']
-    # datasets = ['ACM', 'DBLP', 'Citeseer']
+    clusters = {
+        'acm': 3,
+        'dblp': 4,
+        'wiki': 19,
+        'amac': 10,
+        'amap': 8
+    }
+
+    # datasets = ['Citeseer', 'Cora']
+    datasets = ['acm']
+    # datasets = ['acm', 'dblp']
+
+    lambda1_s = [0.1, 0.5, 1, 2, 5, 10]
+    beta1_s = [0.1, 0.5, 1, 2, 5, 10]
+    # datasets = ['amap']
     # args.name = 'ACM'
     for args.name in datasets:
         dataset = None
+        for args.lambda1 in lambda1_s:
+            for args.beta in beta1_s:
+                for i in range(10):
 
-        if args.name in ['Cora', 'Citeseer', 'Pubmed']:
-            datasets = utils.get_dataset(args.name)
-            args.n_clusters = datasets.num_classes
-            dataset = datasets[0]
-            args.input_dim = dataset.num_features
+                    if args.name in ['Cora', 'Citeseer', 'Pubmed']:
+                        datasets = utils.get_dataset(args.name)
+                        args.n_clusters = datasets.num_classes
+                        dataset = datasets[0]
+                        args.input_dim = dataset.num_features
 
-        if args.name in ['ACM', 'DBLP']:
-            dataset = scipy.io.loadmat(f'./dataset/{args.name}.mat')
-            args.n_cluster = dataset['label'].shape[1]
-            if args.name == 'ACM':
-                args.input_dim = dataset['feature'].shape[1]
-            else:
-                args.input_dim = dataset['features'].shape[1]
+                    if args.name in ['acm', 'dblp', 'wiki', 'amap']:
+                        data_adj = np.load(f'./dataset/{args.name}/{args.name}_adj.npy')
+                        data_feat = np.load(f'./dataset/{args.name}/{args.name}_feat.npy')
+                        data_label = np.load(f'./dataset/{args.name}/{args.name}_label.npy')
+                        args.n_clusters = clusters[f'{args.name}']
+                        args.input_dim = data_feat.shape[1]
+                        dataset = Dataset(name=f'{args.name}', adj=data_adj, features=data_feat, labels=data_label,
+                                          n_clusters=args.n_clusters)
+                        # dataset.adj = torch.Tensor(dataset.adj, dtype=torch.float32).to_dense()
+                        # dataset.adj = torch.from_numpy(dataset.features).float().to(device).to_dense()
 
-        SAVE_PATH = f"./result/{args.name}_res.csv"
+                    SAVE_PATH = f"./result/{args.name}_res.csv"
 
-        # cora数据集 2708个节点，5429条边。标签共7个类别。数据集的特征维度是1433维。
-        # citeSeer数据集 3312个节点，4723条边。标签共7个类别。数据集的特征维度是3703维。
-        # PubMed数据集(引文网络)包括来自Pubmed数据库的19717篇关于糖尿病的科学出版物，分为三类：
-        # Diabetes Mellitus, Experimental
-        # Diabetes Mellitus Type 1
-        # Diabetes Mellitus Type 2
-        if args.name == 'Cora':
-            args.lr = 6e-3
-            args.lambda1 = 1
-            args.beta = 1
+                    # cora数据集 2708个节点，5429条边。标签共7个类别。数据集的特征维度是1433维。
+                    # citeSeer数据集 3312个节点，4723条边。标签共7个类别。数据集的特征维度是3703维。
+                    # PubMed数据集(引文网络)包括来自Pubmed数据库的19717篇关于糖尿病的科学出版物，分为三类：
+                    # Diabetes Mellitus, Experimental
+                    # Diabetes Mellitus Type 1
+                    # Diabetes Mellitus Type 2
+                    if args.name == 'Cora':
+                        args.lr = 6e-3
+                        args.lambda1 = 1
+                        args.beta = 1
 
-        if args.name == 'Citeseer':
-            args.lr = 1e-3
-            args.lambda1 = 1
-            args.beta = 1
-            args.embedding_size = 32
+                    if args.name == 'Citeseer':
+                        args.lr = 1e-3
+                        args.lambda1 = 1
+                        args.beta = 1
+                        args.embedding_size = 32
 
-        if args.name == 'DBLP':
-            args.lr = 1e-2
-            args.lambda1 = 0.5
-            args.beta = 10
+                    if args.name == 'dblp':
+                        args.lr = 1e-2
+                        # args.lambda1 = 0.5
+                        # args.beta = 10
 
-        if args.name == 'ACM':
-            args.lr = 5e-3
-            args.lambda1 = 0.5
-            args.beta = 10
+                    if args.name == 'acm':
+                        args.lr = 5e-3
+                        # args.lambda1 = 0.5
+                        # args.beta = 10
 
-        if args.name == 'Pubmed':
-            args.lr = 1e-3
-            args.lambda1 = 0.5
-            args.beta = 10
+                    if args.name == 'Pubmed':
+                        args.lr = 1e-3
+                        args.lambda1 = 0.5
+                        args.beta = 10
 
-        # args.pretrain_path = f"./pretrain/pre_ddgae_{args.name}_new.pkl"
+                    # args.pretrain_path = f"./pretrain/pre_ddgae_{args.name}_new.pkl"
 
-        acc = []
-        nmi = []
-        ari = []
-        f1 = []
-        for i in range(10):
-            acc_best, nmi_best, ari_best, f1_best = trainer(dataset)
-            acc.append(acc_best)
-            nmi.append(nmi_best)
-            ari.append(ari_best)
-            f1.append(f1_best)
-            res = [acc_best, nmi_best, ari_best, f1_best, 'max_epoch', args.alpha, args.lambda1, args.beta, args.lr]
-            res_ = np.array(res).reshape(1, -1)
-            columns = ['ACC', 'NMI', 'ARI', 'F1', 'Type', 'alpha', 'lambda1', 'beta', 'lr']
-            utils.data_to_save(res_, SAVE_PATH, columns)
-        print("#####################################")
-        print("ACC mean", round(np.mean(acc), 5), "max", np.max(acc), "std", np.std(acc), "\n", acc)
-        print("NMI mean", round(np.mean(nmi), 5), "max", np.max(nmi), "std", np.std(nmi), "\n", nmi)
-        print("ARI mean", round(np.mean(ari), 5), "max", np.max(ari), "std", np.std(ari), "\n", ari)
-        print("F1  mean", round(np.mean(f1), 5), "max", np.max(f1), "std", np.std(f1), "\n", f1)
-        print(':acc, nmi, ari, f1: \n{:.4f}\n{:.4f}\n{:.4f}\n{:.4f}'.format(round(np.mean(acc), 5),
-                                                                            round(np.mean(nmi), 5),
-                                                                            round(np.mean(ari), 5),
-                                                                            round(np.mean(f1), 5)))
-        res_max = [np.max(acc), np.max(nmi), np.max(ari), np.max(f1), 'max_for', args.alpha, args.lambda1, args.beta,
-                   args.lr]
-        res_max = np.array(res_max).reshape(1, -1)
-        columns = ['ACC', 'NMI', 'ARI', 'F1', 'Type', 'alpha', 'lambda1', 'beta', 'lr']
-        utils.data_to_save(res_max, SAVE_PATH, columns)
+                    acc = []
+                    nmi = []
+                    ari = []
+                    f1 = []
+                    for i in range(1):
+                        acc_best, nmi_best, ari_best, f1_best = trainer(dataset)
+                        acc.append(acc_best)
+                        nmi.append(nmi_best)
+                        ari.append(ari_best)
+                        f1.append(f1_best)
+                        res = [acc_best, nmi_best, ari_best, f1_best, 'max_epoch', args.alpha, args.lambda1, args.beta, args.lr]
+                        res_ = np.array(res).reshape(1, -1)
+                        columns = ['ACC', 'NMI', 'ARI', 'F1', 'Type', 'alpha', 'lambda1', 'beta', 'lr']
+                        utils.data_to_save(res_, SAVE_PATH, columns)
+                    print("#####################################")
+                    print("ACC mean", round(np.mean(acc), 5), "max", np.max(acc), "std", np.std(acc), "\n", acc)
+                    print("NMI mean", round(np.mean(nmi), 5), "max", np.max(nmi), "std", np.std(nmi), "\n", nmi)
+                    print("ARI mean", round(np.mean(ari), 5), "max", np.max(ari), "std", np.std(ari), "\n", ari)
+                    print("F1  mean", round(np.mean(f1), 5), "max", np.max(f1), "std", np.std(f1), "\n", f1)
+                    print(':acc, nmi, ari, f1: \n{:.4f}\n{:.4f}\n{:.4f}\n{:.4f}'.format(round(np.mean(acc), 5),
+                                                                                        round(np.mean(nmi), 5),
+                                                                                        round(np.mean(ari), 5),
+                                                                                        round(np.mean(f1), 5)))
+                    res_max = [np.max(acc), np.max(nmi), np.max(ari), np.max(f1), 'max_for', args.alpha, args.lambda1, args.beta,
+                               args.lr]
+                    res_max = np.array(res_max).reshape(1, -1)
+                    columns = ['ACC', 'NMI', 'ARI', 'F1', 'Type', 'alpha', 'lambda1', 'beta', 'lr']
+                    utils.data_to_save(res_max, SAVE_PATH, columns)
