@@ -70,7 +70,6 @@ class SpGATLayer(nn.Module):
         attn_self = torch.mm(h, self.a_self)  # (N, 1)
         attn_neighs = torch.mm(h, self.a_neighs)  # (N, 1)
         attn_dense = attn_self + attn_neighs.T  # (N, N)
-        # attn_dense = torch.mul(attn_dense, M)  # 受 M 影响
         attn_dense = self.leakyrelu(attn_dense)
 
         # 只对邻接矩阵中有连接的部分计算注意力

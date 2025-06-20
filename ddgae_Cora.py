@@ -3,16 +3,11 @@ import os
 import pickle
 import time
 
-import pandas as pd
-from matplotlib import colormaps
-
-import networkx as nx
 import scipy
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from matplotlib import pyplot as plt
 from torch.nn.parameter import Parameter
 from torch.optim import Adam
 import numpy as np
@@ -87,7 +82,12 @@ def trainer(dataset_, ALPHA=1.1, BETA=10, LBD=.1):
         y = np.argmax(dataset_['label'], axis=1)
         y = y.reshape(-1, 1)
         adj_label = dataset['adj_label'].to(device)
+    # M = utils.get_M(adj).to(device)
 
+    # K = 1 / (adj_label.sum().item()) * (
+    #         adj_label.sum(dim=1).reshape(adj_label.shape[0], 1) @ adj_label.sum(dim=1).reshape(1, adj_label.shape[0]))
+    # B = adj_label - K
+    # B = B.to(device)
     sim_dim = sim.shape[0]
     model = DDGAE(num_features=args.input_dim, B_dim=sim_dim, hidden_size=args.hidden_size,
                   embedding_size=args.embedding_size, alpha=args.alpha, num_clusters=args.n_clusters).to(device)
@@ -101,9 +101,16 @@ def trainer(dataset_, ALPHA=1.1, BETA=10, LBD=.1):
     print(model)
     optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
+    # with torch.no_grad():
+    #     _, z, _, _, _, _ = model.gat(data, B, adj, M)
+    #
+    # # get kmeans and pretrain cluster result
+    # kmeans = KMeans(n_clusters=args.n_clusters, n_init=20)
+    # y_pred = kmeans.fit_predict(z.data.cpu().numpy())
+    # model.cluster_layer.data = torch.tensor(kmeans.cluster_centers_).to(device)
+    # eva(y, y_pred, 'pretrain')pred = []
     max_res = [0, 0, 0, 0]
     result = []
-    pred_save = []
 
     for epoch in range(args.max_epoch):
         model.train()
@@ -137,7 +144,6 @@ def trainer(dataset_, ALPHA=1.1, BETA=10, LBD=.1):
             acc, nmi, ari, f1 = eva(y, pred, loss, epoch)
             if acc >= max_res[0]:
                 max_res[0] = acc
-                pred_save = pred
                 result = [epoch, acc, nmi, ari, f1]
             if nmi >= max_res[1]:
                 max_res[1] = nmi
@@ -151,14 +157,6 @@ def trainer(dataset_, ALPHA=1.1, BETA=10, LBD=.1):
     print("Best Results")
     print(f"epoch {result[0]}, acc {result[1]:.4f}, nmi {result[2]:.4f}, ari {result[3]:.4f}, f1 {result[4]:.4f}")
     print("************************************************")
-    file_path = f"./figs/{args.name}_node_communities.csv"
-    mode = 'a' if os.path.exists(file_path) else 'w'
-    header = not os.path.exists(file_path)
-    # 将社区标签转为字符串
-    community_str = ','.join(map(str, pred_save))
-    df = pd.DataFrame({'Community_Labels': [community_str]})
-    # 写入CSV
-    df.to_csv(file_path, mode=mode, header=header, index=False)
     return max_res[0], max_res[1], max_res[2], max_res[3]
     # return result[1], result[2], result[3], result[4]
 
@@ -195,7 +193,7 @@ if __name__ == "__main__":
     print("use cuda: {}".format(args.cuda))
     device = torch.device("cuda" if args.cuda else "cpu")
 
-    datasets = ['Cora', 'Citeseer']
+    datasets = ['Cora']
     # datasets = ['ACM', 'DBLP', 'Citeseer']
     # args.name = 'ACM'
     for args.name in datasets:
@@ -215,7 +213,7 @@ if __name__ == "__main__":
             else:
                 args.input_dim = dataset['features'].shape[1]
 
-        SAVE_PATH = f"./result/{args.name}_res_test.csv"
+        SAVE_PATH = f"./result/{args.name}_new_res.csv"
 
         # cora数据集 2708个节点，5429条边。标签共7个类别。数据集的特征维度是1433维。
         # citeSeer数据集 3312个节点，4723条边。标签共7个类别。数据集的特征维度是3703维。
@@ -225,24 +223,24 @@ if __name__ == "__main__":
         # Diabetes Mellitus Type 2
         if args.name == 'Cora':
             args.lr = 6e-3
-            args.lambda1 = 2
-            args.beta = 2
+            # args.lambda1 = 1
+            # args.beta = 1
 
         if args.name == 'Citeseer':
             args.lr = 1e-3
-            args.lambda1 = 0.5
-            args.beta = 0.2
+            args.lambda1 = 1
+            args.beta = 1
             args.embedding_size = 32
 
         if args.name == 'DBLP':
             args.lr = 1e-2
-            args.lambda1 = 1
-            args.beta = 1
+            args.lambda1 = 0.5
+            args.beta = 10
 
         if args.name == 'ACM':
             args.lr = 5e-3
             args.lambda1 = 0.5
-            args.beta = 2
+            args.beta = 10
 
         if args.name == 'Pubmed':
             args.lr = 1e-3
@@ -255,27 +253,32 @@ if __name__ == "__main__":
         nmi = []
         ari = []
         f1 = []
-        for i in range(20):
-            acc_best, nmi_best, ari_best, f1_best = trainer(dataset)
-            acc.append(acc_best)
-            nmi.append(nmi_best)
-            ari.append(ari_best)
-            f1.append(f1_best)
-            res = [acc_best, nmi_best, ari_best, f1_best, 'max_epoch', args.alpha, args.lambda1, args.beta, args.lr]
-            res_ = np.array(res).reshape(1, -1)
+        args.lambda1 = 10
+        beta1_s = [10]
+        for args.beta in beta1_s:
+
+            for i in range(5):
+                acc_best, nmi_best, ari_best, f1_best = trainer(dataset)
+                acc.append(acc_best)
+                nmi.append(nmi_best)
+                ari.append(ari_best)
+                f1.append(f1_best)
+                res = [acc_best, nmi_best, ari_best, f1_best, 'max_epoch', args.alpha, args.lambda1, args.beta, args.lr]
+                res_ = np.array(res).reshape(1, -1)
+                columns = ['ACC', 'NMI', 'ARI', 'F1', 'Type', 'alpha', 'lambda1', 'beta', 'lr']
+                utils.data_to_save(res_, SAVE_PATH, columns)
+            print("#####################################")
+            print("ACC mean", round(np.mean(acc), 5), "max", np.max(acc), "std", np.std(acc), "\n", acc)
+            print("NMI mean", round(np.mean(nmi), 5), "max", np.max(nmi), "std", np.std(nmi), "\n", nmi)
+            print("ARI mean", round(np.mean(ari), 5), "max", np.max(ari), "std", np.std(ari), "\n", ari)
+            print("F1  mean", round(np.mean(f1), 5), "max", np.max(f1), "std", np.std(f1), "\n", f1)
+            print(':acc, nmi, ari, f1: \n{:.4f}\n{:.4f}\n{:.4f}\n{:.4f}'.format(round(np.mean(acc), 5),
+                                                                                round(np.mean(nmi), 5),
+                                                                                round(np.mean(ari), 5),
+                                                                                round(np.mean(f1), 5)))
+            res_max = [np.max(acc), np.max(nmi), np.max(ari), np.max(f1), 'max_for', args.alpha, args.lambda1,
+                       args.beta,
+                       args.lr]
+            res_max = np.array(res_max).reshape(1, -1)
             columns = ['ACC', 'NMI', 'ARI', 'F1', 'Type', 'alpha', 'lambda1', 'beta', 'lr']
-            utils.data_to_save(res_, SAVE_PATH, columns)
-        print("#####################################")
-        print("ACC mean", round(np.mean(acc), 5), "max", np.max(acc), "std", np.std(acc), "\n", acc)
-        print("NMI mean", round(np.mean(nmi), 5), "max", np.max(nmi), "std", np.std(nmi), "\n", nmi)
-        print("ARI mean", round(np.mean(ari), 5), "max", np.max(ari), "std", np.std(ari), "\n", ari)
-        print("F1  mean", round(np.mean(f1), 5), "max", np.max(f1), "std", np.std(f1), "\n", f1)
-        print(':acc, nmi, ari, f1: \n{:.4f}\n{:.4f}\n{:.4f}\n{:.4f}'.format(round(np.mean(acc), 5),
-                                                                            round(np.mean(nmi), 5),
-                                                                            round(np.mean(ari), 5),
-                                                                            round(np.mean(f1), 5)))
-        res_max = [np.max(acc), np.max(nmi), np.max(ari), np.max(f1), 'max_for', args.alpha, args.lambda1, args.beta,
-                   args.lr]
-        res_max = np.array(res_max).reshape(1, -1)
-        columns = ['ACC', 'NMI', 'ARI', 'F1', 'Type', 'alpha', 'lambda1', 'beta', 'lr']
-        utils.data_to_save(res_max, SAVE_PATH, columns)
+            utils.data_to_save(res_max, SAVE_PATH, columns)

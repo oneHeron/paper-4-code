@@ -3,11 +3,14 @@ import os
 import pickle
 import time
 
+import networkx as nx
 import scipy
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from matplotlib import pyplot as plt
+from matplotlib.pyplot import colormaps
 from torch.nn.parameter import Parameter
 from torch.optim import Adam
 import numpy as np
@@ -161,6 +164,47 @@ def trainer(dataset_, ALPHA=1.1, BETA=10, LBD=.1):
             if f1 >= max_res[3]:
                 max_res[3] = f1
                 # torch.save(model.state_dict(), args.pretrain_path)
+            # 添加条件判断，仅在特定 epoch 保存（如每 10 个 epoch）
+            if epoch % (args.update_interval * 5) == 0:
+                # 生成图的可视化
+
+                # 新的可视化代码（替换原有networkx绘图）
+                plt.figure(figsize=(16, 12), dpi=100)
+                G = nx.from_numpy_array(adj.to_dense().cpu().numpy())
+                num_nodes = G.number_of_nodes()
+                community_num = max(pred) + 1
+
+                # 布局选择
+                if num_nodes > 4000:
+                    pos = nx.spectral_layout(G)
+                else:
+                    pos = nx.fruchterman_reingold_layout(G, k=0.3, seed=42)
+
+                # 提取坐标
+                x_coords = [pos[node][0] for node in G.nodes()]
+                y_coords = [pos[node][1] for node in G.nodes()]
+
+                # 绘制
+                plt.scatter(x_coords, y_coords,
+                            c=pred,
+                            cmap=colormaps['tab20c'],
+                            s=50 if num_nodes > 3000 else 80,
+                            alpha=0.7)
+
+                # 颜色条和标题
+                sm = plt.cm.ScalarMappable(cmap=colormaps['tab20c'],
+                                           norm=plt.Normalize(0, community_num))
+                sm.set_array([])
+                plt.colorbar(sm, ax=plt.gca(), fraction=0.046, pad=0.04)
+                plt.title(f"Epoch {epoch} | {args.name} Dataset\nNodes: {num_nodes}, Communities: {community_num}",
+                          fontsize=14)
+
+                # 保存
+                plt.axis("off")
+                save_dir = f"./figs/{args.name}/"
+                os.makedirs(save_dir, exist_ok=True)
+                plt.savefig(f"{save_dir}epoch_{epoch}_community.png", bbox_inches="tight", dpi=100)
+                plt.close()
 
     print("************************************************")
     print("Best Results")
@@ -214,8 +258,8 @@ if __name__ == "__main__":
     datasets = ['acm']
     # datasets = ['acm', 'dblp']
 
-    lambda1_s = [0.1, 0.5, 1, 2, 5, 10]
-    beta1_s = [0.1, 0.5, 1, 2, 5, 10]
+    lambda1_s = [0.5]
+    beta1_s = [2]
     # datasets = ['amap']
     # args.name = 'ACM'
     for args.name in datasets:
@@ -287,7 +331,8 @@ if __name__ == "__main__":
                         nmi.append(nmi_best)
                         ari.append(ari_best)
                         f1.append(f1_best)
-                        res = [acc_best, nmi_best, ari_best, f1_best, 'max_epoch', args.alpha, args.lambda1, args.beta, args.lr]
+                        res = [acc_best, nmi_best, ari_best, f1_best, 'max_epoch', args.alpha, args.lambda1, args.beta,
+                               args.lr]
                         res_ = np.array(res).reshape(1, -1)
                         columns = ['ACC', 'NMI', 'ARI', 'F1', 'Type', 'alpha', 'lambda1', 'beta', 'lr']
                         utils.data_to_save(res_, SAVE_PATH, columns)
@@ -300,7 +345,8 @@ if __name__ == "__main__":
                                                                                         round(np.mean(nmi), 5),
                                                                                         round(np.mean(ari), 5),
                                                                                         round(np.mean(f1), 5)))
-                    res_max = [np.max(acc), np.max(nmi), np.max(ari), np.max(f1), 'max_for', args.alpha, args.lambda1, args.beta,
+                    res_max = [np.max(acc), np.max(nmi), np.max(ari), np.max(f1), 'max_for', args.alpha, args.lambda1,
+                               args.beta,
                                args.lr]
                     res_max = np.array(res_max).reshape(1, -1)
                     columns = ['ACC', 'NMI', 'ARI', 'F1', 'Type', 'alpha', 'lambda1', 'beta', 'lr']

@@ -215,8 +215,8 @@ if __name__ == "__main__":
     # datasets = ['acm', 'dblp']
 
     # lambda1_s = [0.1, 0.5, 1, 2, 5, 10]
-    lambda1_s = [10, 5, 2, 1, 0.5, 1]
-    beta1_s = [10, 5, 2, 1, 0.5, 1]
+    lambda1_s = [0.5]
+    beta1_s = [5]
     # beta1_s = [0.1, 0.5, 1, 2, 5, 10]
     # datasets = ['amap']
     # args.name = 'ACM'
@@ -289,7 +289,8 @@ if __name__ == "__main__":
                         nmi.append(nmi_best)
                         ari.append(ari_best)
                         f1.append(f1_best)
-                        res = [acc_best, nmi_best, ari_best, f1_best, 'max_epoch', args.alpha, args.lambda1, args.beta, args.lr]
+                        res = [acc_best, nmi_best, ari_best, f1_best, 'max_epoch', args.alpha, args.lambda1, args.beta,
+                               args.lr]
                         res_ = np.array(res).reshape(1, -1)
                         columns = ['ACC', 'NMI', 'ARI', 'F1', 'Type', 'alpha', 'lambda1', 'beta', 'lr']
                         utils.data_to_save(res_, SAVE_PATH, columns)
@@ -302,7 +303,8 @@ if __name__ == "__main__":
                                                                                         round(np.mean(nmi), 5),
                                                                                         round(np.mean(ari), 5),
                                                                                         round(np.mean(f1), 5)))
-                    res_max = [np.max(acc), np.max(nmi), np.max(ari), np.max(f1), 'max_for', args.alpha, args.lambda1, args.beta,
+                    res_max = [np.max(acc), np.max(nmi), np.max(ari), np.max(f1), 'max_for', args.alpha, args.lambda1,
+                               args.beta,
                                args.lr]
                     res_max = np.array(res_max).reshape(1, -1)
                     columns = ['ACC', 'NMI', 'ARI', 'F1', 'Type', 'alpha', 'lambda1', 'beta', 'lr']
