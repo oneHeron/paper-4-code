@@ -1,0 +1,6 @@
+# 忽略所有.mat文件
+*.mat
+
+# 如果只想忽略特定的.mat文件，可以使用：
+# dataset/ACM.mat
+# dataset/DBLP.mat
