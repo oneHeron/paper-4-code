@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+<<<<<<< HEAD
   <component name="Black">
     <option name="sdkName" value="D:\env\miniconda3\envs\pytorch-gpu" />
   </component>
+=======
+>>>>>>> f18834d995164a608d993b27bc5479552b098697
   <component name="ProjectRootManager" version="2" project-jdk-name="D:\env\miniconda3\envs\pytorch-gpu" project-jdk-type="Python SDK" />
 </project>
